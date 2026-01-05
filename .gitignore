@@ -6,16 +6,30 @@
 
 # Gradle
 .gradle/
-build/
-gradle.properties
+**/build/
+/build/
 local.properties
+gradle-app.setting
+!gradle/wrapper/gradle-wrapper.jar
 
-# Android
+# NDK / C++
+.cxx/
+.externalNativeBuild/
+
+# Android outputs
 *.apk
 *.aab
 *.aar
 *.dex
 *.so
+*.ap_
+*.d
+
+# Python / tooling caches
+__pycache__/
+*.pyc
+.venv/
+venv/
 
 # Logs
 *.log
@@ -35,13 +49,13 @@ coverage/
 *.jks
 *.keystore
 
-# ProGuard
+# ProGuard / R8
 proguard/
 *.mapping
 
 # FFmpegKit
 ffmpeg-kit/
 
-# App specific
+# App specific outputs
 app/release/
 app/debug/

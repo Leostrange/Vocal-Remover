@@ -3,18 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Разрешения для доступа к файлам -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29"
         tools:ignore="ScopedStorage" />
-
-    <!-- Разрешения для Android 13+ -->
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-
-    <!-- Разрешения для обработки в фоне (опционально) -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <application
         android:name=".VocalRemoverApp"

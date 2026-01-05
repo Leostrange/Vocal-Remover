@@ -1,8 +1,6 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("com.google.dagger.hilt.android")
-    id("com.google.devtools.ksp")
 }
 
 android {
@@ -90,6 +88,7 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("androidx.activity:activity-ktx:1.8.1")
     implementation("androidx.fragment:fragment-ktx:1.6.2")
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
 
     // Lifecycle components
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2")
@@ -100,22 +99,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 
-    // Hilt - Dependency Injection
-    implementation("com.google.dagger:hilt-android:2.48.1")
-    ksp("com.google.dagger:hilt-compiler:2.48.1")
-
-    // FFmpegKit - для аудио обработки (опционально, может быть добавлен при необходимости)
-    // implementation("com.arthenica:ffmpeg-kit-full:6.0")
-
-    // TensorFlow Lite - для ML моделей
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
-    implementation("org.tensorflow:tensorflow-lite-metadata:0.4.4")
-    implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.14.0")
-
-    // Apache Commons - для архивации
-    implementation("org.apache.commons:commons-compress:1.25.0")
-    implementation("commons-io:commons-io:2.15.1")
+    // FFmpegKit - офлайн обработка аудио
+    implementation("com.arthenica:ffmpeg-kit-full:6.0")
 
     // Testing
     testImplementation("junit:junit:4.13.2")
