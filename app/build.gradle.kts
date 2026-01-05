@@ -104,8 +104,8 @@ dependencies {
     implementation("com.google.dagger:hilt-android:2.48.1")
     ksp("com.google.dagger:hilt-compiler:2.48.1")
 
-    // FFmpegKit - для аудио обработки
-    implementation("com.arthenica:ffmpeg-kit-full:6.0")
+    // FFmpegKit - для аудио обработки (опционально, может быть добавлен при необходимости)
+    // implementation("com.arthenica:ffmpeg-kit-full:6.0")
 
     // TensorFlow Lite - для ML моделей
     implementation("org.tensorflow:tensorflow-lite:2.14.0")

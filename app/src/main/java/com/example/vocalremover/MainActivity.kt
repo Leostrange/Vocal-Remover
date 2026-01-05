@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.util.Log
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -245,5 +246,10 @@ class MainActivity : AppCompatActivity(), VocalProcessor.ProgressCallback {
             Toast.makeText(this, "Ошибка: $error", Toast.LENGTH_LONG).show()
             resetUI()
         }
+    }
+
+    override fun onIntermediateResult(type: String, data: Any) {
+        // Промежуточные результаты обрабатываются здесь
+        Log.d("MainActivity", "Intermediate result: $type")
     }
 }

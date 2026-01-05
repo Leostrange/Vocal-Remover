@@ -27,7 +27,7 @@ class PerformanceOptimizer @Inject constructor(
     
     data class OptimizationConfig(
         val enableParallelProcessing: Boolean = true,
-        val maxConcurrentTasks: Int = processorCount,
+        val maxConcurrentTasks: Int = Runtime.getRuntime().availableProcessors(),
         val memoryThreshold: Double = 0.8,
         val enableCache: Boolean = true,
         val enableHardwareAcceleration: Boolean = true

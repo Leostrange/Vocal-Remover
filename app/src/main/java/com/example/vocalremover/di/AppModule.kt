@@ -44,12 +44,9 @@ object AppModule {
     @Provides
     @Singleton
     fun provideVocalProcessor(
-        context: Context,
-        audioAnalyzer: AudioAnalyzer,
-        mlModelManager: MLModelManager,
-        performanceOptimizer: PerformanceOptimizer
+        context: Context
     ): VocalProcessor {
-        return VocalProcessor(context, audioAnalyzer, mlModelManager, performanceOptimizer)
+        return VocalProcessor(context)
     }
 
     @Provides

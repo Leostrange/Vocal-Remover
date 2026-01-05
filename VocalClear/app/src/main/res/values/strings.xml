@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App Name and Description -->
+    <string name="app_name">VocalClear</string>
+    <string name="app_description">Приложение для разделения вокальных и инструментальных партий в аудиофайлах. Выберите аудиофайл, выберите режим обработки и получите результат.</string>
+
+    <!-- Settings -->
+    <string name="settings">Настройки</string>
+
+    <!-- Permissions -->
+    <string name="permission_denied">Разрешение на чтение файлов не предоставлено</string>
+
+    <!-- File Selection -->
+    <string name="input_file">Входной файл</string>
+    <string name="select_audio_file">Выбрать аудиофайл</string>
+    <string name="clear">Очистить</string>
+    <string name="output_audio">Обработанный аудиофайл</string>
+
+    <!-- Processing Modes -->
+    <string name="processing_mode">Режим обработки</string>
+    <string name="offline_mode">Офлайн</string>
+    <string name="online_mode">Онлайн</string>
+    <string name="offline_description">Обработка выполняется на устройстве без подключения к интернету. Требует больше времени и ресурсов устройства.</string>
+    <string name="online_description">Обработка выполняется на сервере. Быстрее и качественнее, но требуется подключение к интернету.</string>
+    <string name="select_mode">Выберите режим</string>
+    <string name="mode_selection_message">Выберите режим обработки для вашего аудиофайла:</string>
+
+    <!-- Processing -->
+    <string name="processing">Обработка</string>
+    <string name="start_processing">Начать обработку</string>
+    <string name="ready_to_process">Файл выбран. Нажмите кнопку ниже для начала обработки.</string>
+    <string name="select_file_first">Сначала выберите аудиофайл</string>
+
+    <!-- Results -->
+    <string name="result_ready">Результат готов!</string>
+    <string name="download">Скачать</string>
+
+    <!-- Errors -->
+    <string name="error_file_not_found">Файл не найден</string>
+    <string name="error_processing_failed">Ошибка обработки: %1$s</string>
+    <string name="error_network_error">Ошибка сети. Проверьте подключение к интернету.</string>
+    <string name="error_download_failed">Не удалось загрузить результат</string>
+
+    <!-- Progress Messages -->
+    <string name="progress_preparing">Подготовка к обработке…</string>
+    <string name="progress_extracting">Извлечение вокальных партий…</string>
+    <string name="progress_saving">Сохранение результата…</string>
+    <string name="progress_uploading">Загрузка на сервер…</string>
+    <string name="progress_processing_server">Обработка на сервере…</string>
+    <string name="progress_downloading">Загрузка результата…</string>
+
+    <!-- ==================== Vocal Section Editor Strings ==================== -->
+    <string name="section_editor">Редактор секций</string>
+    <string name="auto_detect">Автоопределение</string>
+    <string name="add_section">Добавить секцию</string>
+    <string name="export_all">Экспортировать все</string>
+    <string name="clear_all">Очистить все</string>
+    <string name="no_sections_yet">Секции пока не созданы. Нажмите + чтобы добавить первую секцию.</string>
+
+    <string name="section_name">Название секции</string>
+    <string name="start_time">Начало</string>
+    <string name="end_time">Конец</string>
+    <string name="seconds">сек</string>
+    <string name="max_duration_format">Максимальная длительность: %1$s</string>
+
+    <string name="edit">Редактировать</string>
+    <string name="export">Экспорт</string>
+    <string name="delete">Удалить</string>
+    <string name="edit_section">Редактирование секции</string>
+    <string name="add">Добавить</string>
+    <string name="save">Сохранить</string>
+    <string name="cancel">Отмена</string>
+
+    <string name="section_exported">Секция \"%1$s\" экспортирована</string>
+    <string name="all_sections_exported">Все секции экспортированы</string>
+    <string name="export_failed">Ошибка экспорта: %1$s</string>
+
+    <string name="vocal_extracted">Вокал извлечён!</string>
+    <string name="open_section_editor">Открыть редактор секций</string>
+    <string name="section_editor_description">Нарежьте вокал на отдельные фрагменты</string>
+</resources>

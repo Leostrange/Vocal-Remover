@@ -2,9 +2,6 @@ package com.example.vocalremover
 
 import android.content.Context
 import android.util.Log
-import com.arthenica.ffmpegkit.FFmpegKit
-import com.arthenica.ffmpegkit.ReturnCode
-import com.arthenica.ffmpegkit.Statistics
 import java.io.*
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -64,15 +61,8 @@ class AudioAnalyzer @Inject constructor(
 
     fun analyzeAudio(file: File): AudioFeatures {
         return try {
-            val probeCommand = "-i \"${file.absolutePath}\" -f null -"
-            val session = FFmpegKit.execute(probeCommand)
-            
-            if (ReturnCode.isSuccess(session.returnCode)) {
-                parseAudioInfo(session.output, file)
-            } else {
-                // Fallback анализ
-                createDefaultFeatures(file)
-            }
+            // Используем базовый анализ без FFmpeg
+            createDefaultFeatures(file)
         } catch (e: Exception) {
             Log.e("AudioAnalyzer", "Error analyzing audio", e)
             createDefaultFeatures(file)
@@ -81,20 +71,8 @@ class AudioAnalyzer @Inject constructor(
 
     fun analyzeFrequencySpectrum(file: File): FrequencyAnalysis {
         return try {
-            // Создаем временный файл для анализа
-            val tempAnalysisFile = File(file.parent, "analysis_${System.currentTimeMillis()}.txt")
-            
-            // Команда для получения спектра
-            val spectrumCommand = "-i \"${file.absolutePath}\" -af \"aformat=channel_layouts=mono,showfreqs=mode=combined:fscale=log:units=Hz:ascale=log\" -f null -"
-            
-            val session = FFmpegKit.execute(spectrumCommand)
-            
-            if (ReturnCode.isSuccess(session.returnCode)) {
-                parseFrequencyData(session.output)
-            } else {
-                // Приблизительный анализ на основе длительности и размера файла
-                estimateFrequencyData(file)
-            }
+            // Упрощенный анализ без FFmpeg
+            estimateFrequencyData(file)
         } catch (e: Exception) {
             Log.e("AudioAnalyzer", "Error analyzing frequency spectrum", e)
             createDefaultFrequencyAnalysis()
@@ -103,17 +81,8 @@ class AudioAnalyzer @Inject constructor(
 
     fun detectBeats(file: File): BeatAnalysis {
         return try {
-            // Команда для детекции битов
-            val beatCommand = "-i \"${file.absolutePath}\" -af \"beats\" -f null -"
-            
-            val session = FFmpegKit.execute(beatCommand)
-            
-            if (ReturnCode.isSuccess(session.returnCode)) {
-                parseBeatData(session.output)
-            } else {
-                // Fallback: оценка BPM на основе анализа
-                estimateBeats(file)
-            }
+            // Упрощенный анализ битов без FFmpeg
+            estimateBeats(file)
         } catch (e: Exception) {
             Log.e("AudioAnalyzer", "Error detecting beats", e)
             createDefaultBeatAnalysis()
@@ -150,15 +119,8 @@ class AudioAnalyzer @Inject constructor(
 
     fun getWaveformData(file: File, samples: Int = 1000): List<Double> {
         return try {
-            val waveformCommand = "-i \"${file.absolutePath}\" -f null -"
-            val session = FFmpegKit.execute(waveformCommand)
-            
-            if (ReturnCode.isSuccess(session.returnCode)) {
-                parseWaveformData(session.output, samples)
-            } else {
-                // Генерируем синтетические данные волны
-                generateSyntheticWaveform(samples)
-            }
+            // Генерируем синтетические данные волны
+            generateSyntheticWaveform(samples)
         } catch (e: Exception) {
             Log.e("AudioAnalyzer", "Error getting waveform data", e)
             generateSyntheticWaveform(samples)

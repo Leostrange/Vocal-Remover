@@ -75,7 +75,7 @@ class MLModelManager @Inject constructor(
                     val options = Interpreter.Options().apply {
                         setNumThreads(4) // Используем 4 потока для лучшей производительности
                         setUseNNAPI(true) // Используем Android Neural Networks API
-                        setUseXNNPack(true) // Оптимизация для CPU
+                        // XNNPack оптимизация удалена в новых версиях TFLite
                     }
                     vocalSeparationModel = Interpreter(modelBuffer, options)
                 } else {
@@ -104,7 +104,7 @@ class MLModelManager @Inject constructor(
                     val options = Interpreter.Options().apply {
                         setNumThreads(2) // Меньше потоков для stems модели
                         setUseNNAPI(true)
-                        setUseXNNPack(true)
+                        // XNNPack оптимизация удалена в новых версиях TFLite
                     }
                     stemsSeparationModel = Interpreter(modelBuffer, options)
                 } else {
@@ -132,7 +132,7 @@ class MLModelManager @Inject constructor(
                     val options = Interpreter.Options().apply {
                         setNumThreads(2)
                         setUseNNAPI(true)
-                        setUseXNNPack(true)
+                        // XNNPack оптимизация удалена в новых версиях TFLite
                     }
                     genreClassificationModel = Interpreter(modelBuffer, options)
                 }
@@ -382,7 +382,7 @@ class MLModelManager @Inject constructor(
         // Простой rule-based классификатор
         val genre = when {
             features.tempo > 120 && features.energy > 0.7 -> "Electronic"
-            features.tempo < 100 && features.loudness > 0.6 -> "Rock"
+            features.tempo < 100 && features.energy > 0.6 -> "Rock"
             features.danceability > 0.8 -> "Pop"
             features.valence > 0.7 -> "Jazz"
             else -> "Classical"

@@ -246,7 +246,7 @@ object FilterUtils {
             )
             "normalizer" -> Normalize(
                 parameters["targetLevel"] ?: -23.0,
-                parameters["truePeak"] ?: false
+                false // normalizer не поддерживает dynamic type в Map<String, Double>
             )
             else -> null
         }
