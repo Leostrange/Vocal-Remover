@@ -1,255 +1,217 @@
 package com.example.vocalremover
 
 import android.Manifest
-import android.content.ContentResolver
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
-import android.util.Log
-import android.widget.*
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import java.io.File
-import java.io.FileOutputStream
-import java.io.InputStream
+import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.example.vocalremover.databinding.ActivityMainBinding
+import kotlinx.coroutines.launch
 
-class MainActivity : AppCompatActivity(), VocalProcessor.ProgressCallback {
-    
-    private lateinit var selectedFileButton: Button
-    private lateinit var processVocalsButton: Button
-    private lateinit var processStemsButton: Button
-    private lateinit var progressBar: ProgressBar
-    private lateinit var progressText: TextView
-    private lateinit var statusText: TextView
-    
-    // Activity Result API для современной обработки результатов
-    private val filePickerLauncher = registerForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { handleSelectedFile(it) }
-    }
-    
-    private val permissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val allGranted = permissions.all { it.value }
-        if (allGranted) {
-            openFilePicker()
-        } else {
-            Toast.makeText(this, "Требуются разрешения для доступа к файлам", Toast.LENGTH_LONG).show()
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var binding: ActivityMainBinding
+    private val viewModel: ProcessingViewModel by viewModels()
+    private val workManager by lazy { WorkManager.getInstance(this) }
+
+    private val filePicker =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+            if (uri != null) {
+                persistUriPermission(uri)
+                viewModel.updateSelection(uri, resolveFileName(uri))
+            }
         }
-    }
-    
-    private var selectedFile: File? = null
-    private val vocalProcessor = VocalProcessor(this)
-    
+
+    private val writePermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                startProcessingInternal()
+            } else {
+                Toast.makeText(
+                    this,
+                    "Для сохранения в Загрузки нужно разрешение на запись",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        initViews()
         setupListeners()
+        observeState()
+        observeWork()
     }
-    
-    private fun initViews() {
-        selectedFileButton = findViewById(R.id.selectFileButton)
-        processVocalsButton = findViewById(R.id.processVocalsButton)
-        processStemsButton = findViewById(R.id.processStemsButton)
-        progressBar = findViewById(R.id.progressBar)
-        progressText = findViewById(R.id.progressText)
-        statusText = findViewById(R.id.statusText)
-    }
-    
+
     private fun setupListeners() {
-        selectedFileButton.setOnClickListener {
-            checkPermissionsAndOpenFilePicker()
+        binding.selectFileButton.setOnClickListener { filePicker.launch(arrayOf("audio/*")) }
+        binding.startProcessingButton.setOnClickListener { startProcessing() }
+        binding.cancelProcessingButton.setOnClickListener {
+            workManager.cancelUniqueWork(AudioProcessWorker.WORK_NAME)
         }
-        
-        processVocalsButton.setOnClickListener {
-            selectedFile?.let { file ->
-                startVocalsSeparation(file)
-            } ?: run {
-                Toast.makeText(this, "Сначала выберите файл", Toast.LENGTH_SHORT).show()
-            }
-        }
-        
-        processStemsButton.setOnClickListener {
-            selectedFile?.let { file ->
-                startStemsSeparation(file)
-            } ?: run {
-                Toast.makeText(this, "Сначала выберите файл", Toast.LENGTH_SHORT).show()
+        binding.openZipButton.setOnClickListener { viewModel.uiState.value.resultUri?.let(::openZip) }
+        binding.shareZipButton.setOnClickListener { viewModel.uiState.value.resultUri?.let(::shareZip) }
+        binding.copyLogButton.setOnClickListener { copyLogToClipboard() }
+    }
+
+    private fun observeState() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.uiState.collect { state ->
+                    binding.progressBar.progress = state.progressPercent
+                    binding.progressPercent.text = "${state.progressPercent}%"
+                    binding.progressStep.text = state.stepMessage
+
+                    binding.statusText.text = state.statusMessage
+                    binding.selectedFileText.text =
+                        if (state.selectedUri != null) state.selectedName else "Файл не выбран"
+
+                    binding.startProcessingButton.isEnabled = state.selectedUri != null && !state.isProcessing
+                    binding.cancelProcessingButton.isVisible = state.isProcessing
+
+                    binding.openZipButton.isVisible = state.resultUri != null
+                    binding.shareZipButton.isVisible = state.resultUri != null
+
+                    binding.errorText.isVisible = state.errorMessage != null
+                    binding.errorText.text = state.errorMessage.orEmpty()
+                    binding.copyLogButton.isVisible = state.logTail?.isNotBlank() == true
+                }
             }
         }
     }
-    
-    private fun checkPermissionsAndOpenFilePicker() {
-        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
-        } else {
-            arrayOf(
-                Manifest.permission.READ_EXTERNAL_STORAGE,
+
+    private fun observeWork() {
+        workManager.getWorkInfosForUniqueWorkLiveData(AudioProcessWorker.WORK_NAME)
+            .observe(this) { infos ->
+                viewModel.updateFromWorkInfo(infos.firstOrNull())
+            }
+    }
+
+    private fun startProcessing() {
+        if (viewModel.uiState.value.isProcessing) {
+            Toast.makeText(this, "Обработка уже запущена", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(
+                this,
                 Manifest.permission.WRITE_EXTERNAL_STORAGE
-            )
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            writePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            return
         }
-        
-        val permissionsToRequest = permissions.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-        
-        if (permissionsToRequest.isEmpty()) {
-            openFilePicker()
-        } else {
-            permissionLauncher.launch(permissionsToRequest.toTypedArray())
-        }
+
+        startProcessingInternal()
     }
-    
-    private fun openFilePicker() {
-        try {
-            filePickerLauncher.launch("audio/*")
-        } catch (e: Exception) {
-            // Fallback для старых устройств
-            val intent = Intent(Intent.ACTION_GET_CONTENT)
-            intent.type = "audio/*"
-            intent.addCategory(Intent.CATEGORY_OPENABLE)
-            startActivity(Intent.createChooser(intent, "Выберите аудио файл"))
+
+    private fun startProcessingInternal() {
+        val selectedUri = viewModel.uiState.value.selectedUri
+        if (selectedUri == null) {
+            Toast.makeText(this, "Сначала выберите аудио файл", Toast.LENGTH_SHORT).show()
+            return
         }
+
+        viewModel.clearResult()
+
+        val threshold = parseDouble(binding.thresholdInput.text.toString(), -35.0)
+        val minSilence = parseDouble(binding.minSilenceInput.text.toString(), 0.35)
+        val minSegment = parseDouble(binding.minSegmentInput.text.toString(), 1.0)
+        val padding = parseDouble(binding.paddingInput.text.toString(), 0.15)
+
+        val requestData = AudioProcessWorker.buildInputData(
+            audioUri = selectedUri,
+            silenceThreshold = threshold,
+            minSilence = minSilence,
+            minSegment = minSegment,
+            padding = padding
+        )
+
+        val workRequest = OneTimeWorkRequestBuilder<AudioProcessWorker>()
+            .setInputData(requestData)
+            .addTag(AudioProcessWorker.WORK_TAG)
+            .build()
+
+        workManager.enqueueUniqueWork(
+            AudioProcessWorker.WORK_NAME,
+            ExistingWorkPolicy.KEEP,
+            workRequest
+        )
+
+        Toast.makeText(this, "Обработка запущена в фоне", Toast.LENGTH_SHORT).show()
     }
-    
-    private fun handleSelectedFile(uri: Uri) {
-        try {
-            // Копируем файл во внутреннее хранилище для обработки
-            selectedFile = copyUriToInternalStorage(uri)
-            selectedFileButton.text = "Выбран: ${selectedFile?.name ?: "файл"}"
-            statusText.text = "Файл готов к обработке"
-            processVocalsButton.isEnabled = true
-            processStemsButton.isEnabled = true
-        } catch (e: Exception) {
-            Toast.makeText(this, "Ошибка загрузки файла: ${e.message}", Toast.LENGTH_LONG).show()
-        }
+
+    private fun parseDouble(value: String, fallback: Double): Double {
+        return value.replace(",", ".").toDoubleOrNull() ?: fallback
     }
-    
-    private fun copyUriToInternalStorage(uri: Uri): File? {
-        return try {
-            val contentResolver: ContentResolver = applicationContext.contentResolver
-            val inputStream: InputStream = contentResolver.openInputStream(uri) ?: return null
-            
-            // Получаем имя файла из URI или генерируем
-            val fileName = getFileName(uri) ?: "audio_${System.currentTimeMillis()}.mp3"
-            val outputFile = File(cacheDir, fileName)
-            
-            FileOutputStream(outputFile).use { outputStream ->
-                inputStream.copyTo(outputStream)
-            }
-            inputStream.close()
-            
-            outputFile
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Error copying file from URI", e)
-            null
-        }
-    }
-    
-    private fun getFileName(uri: Uri): String? {
-        var name: String? = null
+
+    private fun resolveFileName(uri: Uri): String {
         contentResolver.query(uri, null, null, null, null)?.use { cursor ->
             val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
             if (nameIndex >= 0 && cursor.moveToFirst()) {
-                name = cursor.getString(nameIndex)
+                return cursor.getString(nameIndex)
             }
         }
-        return name
+        return uri.lastPathSegment ?: "audio_file"
     }
-    
-    private fun startVocalsSeparation(file: File) {
-        val outputDir = File(getExternalFilesDir(Environment.DIRECTORY_MUSIC), "vocal_remover")
-        
-        updateUI(0, "Начинаем разделение вокала...")
-        processVocalsButton.isEnabled = false
-        processStemsButton.isEnabled = false
-        
-        vocalProcessor.separateVocals(file, outputDir, this)
-    }
-    
-    private fun startStemsSeparation(file: File) {
-        val outputDir = File(getExternalFilesDir(Environment.DIRECTORY_MUSIC), "stems_remover")
-        
-        updateUI(0, "Начинаем разделение на дорожки...")
-        processVocalsButton.isEnabled = false
-        processStemsButton.isEnabled = false
-        
-        vocalProcessor.separateStems(file, outputDir, 4, this)
-    }
-    
-    private fun updateUI(progress: Int, message: String) {
-        runOnUiThread {
-            progressBar.progress = progress
-            progressText.text = "$progress%"
-            statusText.text = message
-        }
-    }
-    
-    private fun resetUI() {
-        runOnUiThread {
-            progressBar.progress = 0
-            progressText.text = "0%"
-            statusText.text = "Готов к обработке"
-            processVocalsButton.isEnabled = true
-            processStemsButton.isEnabled = true
-        }
-    }
-    
 
-    
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        // Этот метод оставлен для обратной совместимости
-        // Основная обработка теперь через ActivityResult API
-    }
-    
-    // VocalProcessor.ProgressCallback implementation
-    override fun onProgress(progress: Int, message: String) {
-        updateUI(progress, message)
-    }
-    
-    override fun onComplete(outputFile: File) {
-        runOnUiThread {
-            Toast.makeText(
-                this,
-                "Обработка завершена! Файл сохранен: ${outputFile.name}",
-                Toast.LENGTH_LONG
-            ).show()
-            
-            // Открываем файл с использованием FileProvider для Android 7+
-            val uri = Uri.fromFile(outputFile)
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, if (outputFile.name.endsWith(".zip")) "application/zip" else "audio/*")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            
-            try {
-                startActivity(Intent.createChooser(intent, "Открыть результат"))
-            } catch (e: Exception) {
-                // Если не удалось открыть, показываем путь
-                Toast.makeText(this, "Результат сохранен: ${outputFile.absolutePath}", Toast.LENGTH_LONG).show()
-            }
-            
-            resetUI()
-        }
-    }
-    
-    override fun onError(error: String) {
-        runOnUiThread {
-            Toast.makeText(this, "Ошибка: $error", Toast.LENGTH_LONG).show()
-            resetUI()
+    private fun persistUriPermission(uri: Uri) {
+        try {
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+            contentResolver.takePersistableUriPermission(uri, flags)
+        } catch (_: SecurityException) {
+            // Игнорируем, если невозможно закрепить разрешение
         }
     }
 
-    override fun onIntermediateResult(type: String, data: Any) {
-        // Промежуточные результаты обрабатываются здесь
-        Log.d("MainActivity", "Intermediate result: $type")
+    private fun openZip(uri: Uri) {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/zip")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching { startActivity(Intent.createChooser(intent, "Открыть ZIP")) }
+            .onFailure {
+                Toast.makeText(this, "Не удалось открыть ZIP: ${it.message}", Toast.LENGTH_LONG).show()
+            }
+    }
+
+    private fun shareZip(uri: Uri) {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/zip"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching { startActivity(Intent.createChooser(intent, "Поделиться ZIP")) }
+            .onFailure {
+                Toast.makeText(this, "Не удалось поделиться: ${it.message}", Toast.LENGTH_LONG).show()
+            }
+    }
+
+    private fun copyLogToClipboard() {
+        val log = viewModel.uiState.value.logTail.orEmpty()
+        if (log.isBlank()) return
+
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("FFmpeg log", log))
+        Toast.makeText(this, "Лог скопирован", Toast.LENGTH_SHORT).show()
     }
 }
