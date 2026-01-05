@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Audio wave circle -->
+    <path
+        android:fillColor="#6750A4"
+        android:pathData="M54,54m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0"/>
+    
+    <!-- Audio wave lines representing sound -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M32,54 C32,44 38,38 54,38 C70,38 76,44 76,54 C76,64 70,70 54,70 C38,70 32,64 32,54"/>
+    
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M40,54 C40,48 44,44 54,44 C64,44 68,48 68,54 C68,60 64,64 54,64 C44,64 40,60 40,54"/>
+    
+    <!-- Center point -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,54m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0"/>
+</vector>

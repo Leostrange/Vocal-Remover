@@ -1,0 +1,47 @@
+# Android Studio
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Gradle
+.gradle/
+build/
+gradle.properties
+local.properties
+
+# Android
+*.apk
+*.aab
+*.aar
+*.dex
+*.so
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Test coverage
+coverage/
+
+# Keystore
+*.jks
+*.keystore
+
+# ProGuard
+proguard/
+*.mapping
+
+# FFmpegKit
+ffmpeg-kit/
+
+# App specific
+app/release/
+app/debug/

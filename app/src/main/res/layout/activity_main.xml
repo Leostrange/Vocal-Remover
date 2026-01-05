@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+
+        <!-- Заголовок -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Vocal Remover &amp; Slicer"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Профессиональное разделение аудио"
+            android:textSize="16sp"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Кнопка выбора файла -->
+        <Button
+            android:id="@+id/selectFileButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Выбрать аудио файл"
+            android:textSize="16sp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Информация о файле -->
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Файл не выбран"
+            android:textSize="14sp"
+            android:textAlignment="center"
+            android:layout_marginBottom="24dp"
+            android:background="#F0F0F0"
+            android:padding="12dp" />
+
+        <!-- Прогресс -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="24dp">
+
+            <ProgressBar
+                android:id="@+id/progressBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="100"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/progressText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="0%"
+                android:textAlignment="center"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- Кнопки обработки -->
+        <Button
+            android:id="@+id/processVocalsButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Разделить вокал/инструментал"
+            android:textSize="16sp"
+            android:layout_marginBottom="12dp"
+            android:background="#4CAF50"
+            android:textColor="@android:color/white"
+            android:enabled="false" />
+
+        <Button
+            android:id="@+id/processStemsButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Разделить на 4 дорожки"
+            android:textSize="16sp"
+            android:layout_marginBottom="24dp"
+            android:background="#2196F3"
+            android:textColor="@android:color/white"
+            android:enabled="false" />
+
+        <!-- Описание функций -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#F8F8F8"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Доступные функции:"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="• Разделение вокала и инструменталa\n• Разделение на 4 дорожки (барабаны, бас, вокал, остальное)\n• Создание ZIP архивов с результатами\n• Поддержка всех популярных аудио форматов"
+                android:textSize="14sp"
+                android:lineSpacingExtra="4dp" />
+
+        </LinearLayout>
+
+        <!-- Информация о технологии -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Работает на основе FFmpeg"
+            android:textSize="12sp"
+            android:layout_marginTop="16dp"
+            android:textColor="#666666" />
+
+    </LinearLayout>
+
+</ScrollView>

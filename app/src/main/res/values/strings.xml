@@ -1,0 +1,85 @@
+<resources>
+    <string name="app_name">VocalRemover</string>
+    <string name="app_title">Android Vocal Slicer</string>
+    <string name="select_audio_file">Select Audio File</string>
+    <string name="no_file_selected">No file selected</string>
+    <string name="process_on_device">Process on Device</string>
+    <string name="starting">Starting...</string>
+    <string name="processing">Processing...</string>
+    <string name="done">Done!</string>
+    <string name="process_logs">Process Logs:</string>
+    <string name="success">Success!</string>
+    <string name="error">Error:</string>
+    <string name="app_description">Extract and slice vocals from audio files directly on your device.</string>
+    <string name="select_file_description">Choose an audio file to process. Supported formats: WAV, MP3, etc.</string>
+    <string name="processing_description">The app is analyzing and slicing the vocals. This may take a few moments.</string>
+    
+    <!-- Processing steps -->
+    <string name="step_copying">Preparing file...</string>
+    <string name="step_isolating">Processing audio...</string>
+    <string name="step_detecting">Detecting segments...</string>
+    <string name="step_slicing">Slicing segments...</string>
+    <string name="step_zipping">Creating ZIP...</string>
+    
+    <!-- Messages -->
+    <string name="preparing_file">Preparing file...</string>
+    <string name="converting_to_wav">Converting to WAV...</string>
+    <string name="detecting_vocal_segments">Detecting vocal segments...</string>
+    <string name="slicing_segments">Slicing segments...</string>
+    <string name="creating_zip_archive">Creating ZIP archive...</string>
+    <string name="saving_result">Saving result...</string>
+    
+    <!-- Errors -->
+    <string name="error_failed_to_copy_file">Failed to copy input file</string>
+    <string name="error_unsupported_format">Unsupported audio format. Supported formats: MP3, WAV, FLAC, OGG, M4A, AAC</string>
+    <string name="error_processing_failed">Processing failed</string>
+    <string name="error_failed_to_save">Failed to save to Downloads</string>
+    <string name="error_no_vocal_segments">No vocal segments detected. Try adjusting sensitivity settings.</string>
+    <string name="error_failed_to_slice">Failed to slice any segments</string>
+    <string name="error_failed_to_create_zip">Failed to create ZIP archive</string>
+    <string name="error_no_segments_detected">No vocal segments detected</string>
+    
+    <!-- Success messages -->
+    <string name="success_created_segments">Created %1$d segments (%2$.1fs total)</string>
+    <string name="processing_completed">Processing completed successfully</string>
+    <string name="saved_to_downloads">Saved to Downloads folder</string>
+    
+    <!-- Actions -->
+    <string name="action_retry">Retry</string>
+    <string name="action_process_another">Process Another</string>
+    <string name="action_share">Share</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_settings">Settings</string>
+    
+    <!-- Audio formats -->
+    <string name="format_mp3">MP3</string>
+    <string name="format_wav">WAV</string>
+    <string name="format_flac">FLAC</string>
+    <string name="format_ogg">OGG</string>
+    <string name="format_m4a">M4A</string>
+    <string name="format_aac">AAC</string>
+    
+    <!-- Vocal presets -->
+    <string name="preset_speech">Speech</string>
+    <string name="preset_pop_vocal">Pop Vocal</string>
+    <string name="preset_aggressive">Aggressive</string>
+    
+    <!-- UI elements -->
+    <string name="file_info">File: %1$s</string>
+    <string name="duration_info">Duration: %1$.1f seconds</string>
+    <string name="size_info">Size: %1$s</string>
+    <string name="format_info">Format: %1$s</string>
+    
+    <!-- Additional strings for improved UI -->
+    <string name="app_version">v1.0</string>
+    <string name="processing_complete">Processing complete</string>
+    <string name="grant_permission">Grant Permission</string>
+    <string name="storage_permission_required">Storage permission required</string>
+    <string name="permission_description">Grant permission to select and process audio files</string>
+    <string name="selected">Selected: %1$s</string>
+    <string name="file_info_format">%1$s • %2$s</string>
+    <string name="processing_status">Processing: %1$s</string>
+    <string name="error_reading_file">Error reading file: %1$s</string>
+    <string name="could_not_read_file_info">Could not read file information</string>
+    <string name="powered_by_ffmpeg">Powered by FFmpeg • No server required</string>
+</resources>
