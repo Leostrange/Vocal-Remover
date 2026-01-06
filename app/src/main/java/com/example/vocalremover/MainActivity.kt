@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -22,7 +23,9 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.vocalremover.databinding.ActivityMainBinding
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
 
@@ -33,8 +36,12 @@ class MainActivity : AppCompatActivity() {
     private val filePicker =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             if (uri != null) {
-                persistUriPermission(uri)
+                Log.i(TAG, "Picked uri=$uri")
                 viewModel.updateSelection(uri, resolveFileName(uri))
+                lifecycleScope.launch {
+                    persistUriPermission(uri)
+                    validateUriAccess(uri)
+                }
             }
         }
 
@@ -101,7 +108,18 @@ class MainActivity : AppCompatActivity() {
     private fun observeWork() {
         workManager.getWorkInfosForUniqueWorkLiveData(AudioProcessWorker.WORK_NAME)
             .observe(this) { infos ->
-                viewModel.updateFromWorkInfo(infos.firstOrNull())
+                val info = infos.firstOrNull()
+                if (info != null) {
+                    val progress = info.progress.getInt(AudioProcessWorker.KEY_PROGRESS, -1)
+                    val step = info.progress.getString(AudioProcessWorker.KEY_STEP)
+                    Log.i(
+                        TAG,
+                        "Work update id=${info.id} state=${info.state} progress=$progress step=${step ?: ""}"
+                    )
+                } else {
+                    Log.i(TAG, "No active work info for ${AudioProcessWorker.WORK_NAME}")
+                }
+                viewModel.updateFromWorkInfo(info)
             }
     }
 
@@ -151,6 +169,7 @@ class MainActivity : AppCompatActivity() {
             .addTag(AudioProcessWorker.WORK_TAG)
             .build()
 
+        Log.i(TAG, "Enqueue worker id=${workRequest.id} uri=$selectedUri")
         workManager.enqueueUniqueWork(
             AudioProcessWorker.WORK_NAME,
             ExistingWorkPolicy.KEEP,
@@ -175,11 +194,42 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun persistUriPermission(uri: Uri) {
+        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        Log.i(TAG, "Requesting persistable permission for $uri with flags=0x${flags.toString(16)}")
         try {
-            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
             contentResolver.takePersistableUriPermission(uri, flags)
-        } catch (_: SecurityException) {
-            // Игнорируем, если невозможно закрепить разрешение
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Unable to persist permission for $uri", e)
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "Invalid flags while requesting permission for $uri", e)
+        }
+    }
+
+    private suspend fun validateUriAccess(uri: Uri) {
+        withContext(Dispatchers.IO) {
+            val type = runCatching { contentResolver.getType(uri) }.getOrNull()
+            Log.i(TAG, "Content type for $uri = ${type ?: "unknown"}")
+
+            val readAttempt = runCatching {
+                contentResolver.openInputStream(uri)?.use { input ->
+                    val buffer = ByteArray(1024)
+                    input.read(buffer)
+                } ?: error("Не удалось открыть выбранный файл")
+            }
+
+            readAttempt.onSuccess { bytesRead ->
+                Log.i(TAG, "Validated stream for $uri, bytesRead=$bytesRead")
+            }.onFailure { error ->
+                Log.w(TAG, "Failed to open stream for $uri", error)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Не удалось открыть выбранный файл",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    viewModel.setError("Не удалось открыть выбранный файл")
+                }
+            }
         }
     }
 
@@ -213,5 +263,9 @@ class MainActivity : AppCompatActivity() {
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("FFmpeg log", log))
         Toast.makeText(this, "Лог скопирован", Toast.LENGTH_SHORT).show()
+    }
+
+    companion object {
+        private const val TAG = "VocalRemover"
     }
 }
