@@ -5,6 +5,8 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.provider.OpenableColumns
+import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.work.CoroutineWorker
 import androidx.work.Data
@@ -23,6 +25,13 @@ import kotlin.math.max
 import kotlin.math.min
 
 data class AudioSegment(val start: Double, val end: Double)
+data class InputMetadata(
+    val displayName: String,
+    val sizeBytes: Long?,
+    val extension: String
+)
+
+data class CopiedInput(val file: File, val metadata: InputMetadata)
 
 class AudioProcessWorker(
     context: Context,
@@ -47,14 +56,34 @@ class AudioProcessWorker(
             val inputUri = Uri.parse(inputUriString)
             updateProgress(0, "Подготовка входного файла")
 
-            val copiedInput = File(workingDir, "input_any")
-            copyUriToFile(inputUri, copiedInput)
+            val copiedInput = copyUriToFile(inputUri, workingDir)
+            val displayName = copiedInput.metadata.displayName
+            val sizeBytes = copiedInput.metadata.sizeBytes ?: copiedInput.file.length()
+            val ffmpegAvailable = FeatureFlags.isFfmpegAvailable
+            logCollector.appendLine("FFmpeg available: $ffmpegAvailable")
+            Log.i(TAG, "FFmpeg available: $ffmpegAvailable")
+
+            if (!ffmpegAvailable) {
+                updateProgress(5, "SIMPLIFIED режим")
+                logCollector.appendLine("Mode: SIMPLIFIED")
+                val result = runSimplifiedMode(
+                    inputFile = copiedInput.file,
+                    metadata = copiedInput.metadata,
+                    workingDir = workingDir,
+                    logCollector = logCollector,
+                    sizeBytes = sizeBytes
+                )
+                return result
+            }
+
+            updateProgress(5, "FULL режим")
+            logCollector.appendLine("Mode: FULL")
             ensureNotStopped(logCollector)
 
             updateProgress(15, "Конвертация в WAV")
             val inputWav = File(workingDir, "input.wav")
             if (!runFfmpeg(
-                    command = "-y -i ${copiedInput.absolutePath} -ac 1 -ar 44100 -vn ${inputWav.absolutePath}",
+                    command = "-y -i ${quotePath(copiedInput.file)} -ac 1 -ar 44100 -vn ${quotePath(inputWav)}",
                     logCollector = logCollector
                 )
             ) {
@@ -65,7 +94,7 @@ class AudioProcessWorker(
             updateProgress(30, "Усиление вокала")
             val enhancedWav = File(workingDir, "enhanced.wav")
             if (!runFfmpeg(
-                    command = "-y -i ${inputWav.absolutePath} -af \"highpass=f=200,lowpass=f=3000\" ${enhancedWav.absolutePath}",
+                    command = "-y -i ${quotePath(inputWav)} -af \"highpass=f=200,lowpass=f=3000\" ${quotePath(enhancedWav)}",
                     logCollector = logCollector
                 )
             ) {
@@ -76,7 +105,7 @@ class AudioProcessWorker(
             updateProgress(45, "Анализ тишины")
             val silenceLogs = StringBuilder()
             if (!runFfmpeg(
-                    command = "-hide_banner -i ${enhancedWav.absolutePath} -af \"silencedetect=noise=${silenceThreshold}dB:d=$minSilenceDuration\" -f null -",
+                    command = "-hide_banner -i ${quotePath(enhancedWav)} -af \"silencedetect=noise=${silenceThreshold}dB:d=$minSilenceDuration\" -f null -",
                     logCollector = logCollector,
                     logSink = silenceLogs
                 )
@@ -86,12 +115,12 @@ class AudioProcessWorker(
             ensureNotStopped(logCollector)
 
             updateProgress(55, "Подготовка сегментов")
-            val durationSeconds = readDurationSeconds(enhancedWav)
+            val durationSeconds = readDurationSeconds(enhancedWav, logCollector)
             if (durationSeconds <= 0.0) {
                 return failureResult("Не удалось определить длительность аудио", logCollector)
             }
 
-            val silenceIntervals = parseSilenceIntervals(silenceLogs.toString())
+            val silenceIntervals = SilenceDetectParser.parse(silenceLogs.toString())
             val segments = buildVoiceSegments(
                 silenceIntervals = silenceIntervals,
                 durationSeconds = durationSeconds,
@@ -104,7 +133,8 @@ class AudioProcessWorker(
             }
 
             updateProgress(65, "Нарезка сегментов")
-            val segmentFiles = sliceSegments(enhancedWav, segments, workingDir, logCollector)
+            val segmentsDir = File(workingDir, "segments").apply { mkdirs() }
+            val segmentFiles = sliceSegments(enhancedWav, segments, segmentsDir, logCollector)
             if (segmentFiles.isEmpty()) {
                 return failureResult("Сегменты не были созданы", logCollector)
             }
@@ -112,14 +142,25 @@ class AudioProcessWorker(
 
             updateProgress(90, "Создание ZIP архива")
             val zipFile = File(workingDir, "result.zip")
-            zipSegments(segmentFiles, zipFile)
+            val infoText = buildInfoText(
+                modeLabel = "FULL",
+                displayName = displayName,
+                sizeBytes = sizeBytes,
+                silenceThreshold = silenceThreshold,
+                minSilenceDuration = minSilenceDuration,
+                minSegmentDuration = minSegmentDuration,
+                paddingDuration = paddingDuration,
+                durationSeconds = durationSeconds,
+                segmentsCount = segments.size
+            )
+            val logTail = buildLogTail(logCollector, silenceLogs.toString())
+            zipSegments(segmentFiles, zipFile, infoText, logTail)
             val savedUri = saveToDownloads(zipFile) ?: return failureResult(
                 "Не удалось сохранить ZIP в загрузки",
                 logCollector
             )
 
             updateProgress(100, "Готово")
-            val logTail = buildLogTail(logCollector, silenceLogs.toString())
             return Result.success(
                 workDataOf(
                     KEY_OUTPUT_URI to savedUri.toString(),
@@ -133,7 +174,10 @@ class AudioProcessWorker(
         }
     }
 
-    private suspend fun copyUriToFile(uri: Uri, destination: File) {
+    private suspend fun copyUriToFile(uri: Uri, workingDir: File): CopiedInput {
+        val metadata = resolveInputMetadata(uri)
+        val extension = metadata.extension.ifBlank { "bin" }
+        val destination = File(workingDir, "input_original.$extension")
         withContext(Dispatchers.IO) {
             applicationContext.contentResolver.openInputStream(uri)?.use { input ->
                 FileOutputStream(destination).use { output ->
@@ -141,6 +185,7 @@ class AudioProcessWorker(
                 }
             } ?: error("Не удалось открыть выбранный файл")
         }
+        return CopiedInput(destination, metadata)
     }
 
     private suspend fun runFfmpeg(
@@ -160,32 +205,8 @@ class AudioProcessWorker(
         return ReturnCode.isSuccess(session.returnCode)
     }
 
-    private fun parseSilenceIntervals(logs: String): List<AudioSegment> {
-        val intervals = mutableListOf<AudioSegment>()
-        var currentStart: Double? = null
-        logs.lineSequence().forEach { line ->
-            when {
-                line.contains("silence_start") -> {
-                    currentStart = line.substringAfter("silence_start:").trim().toDoubleOrNull()
-                }
-
-                line.contains("silence_end") -> {
-                    val end = line.substringAfter("silence_end:").substringBefore(" ").trim()
-                        .toDoubleOrNull()
-                    val start = currentStart
-                    if (start != null && end != null) {
-                        intervals.add(AudioSegment(start, end))
-                    }
-                    currentStart = null
-                }
-            }
-        }
-
-        return intervals.sortedBy { it.start }
-    }
-
     private fun buildVoiceSegments(
-        silenceIntervals: List<AudioSegment>,
+        silenceIntervals: List<SilenceInterval>,
         durationSeconds: Double,
         paddingSeconds: Double,
         minSegmentSeconds: Double
@@ -194,11 +215,11 @@ class AudioProcessWorker(
         val voiceSegments = mutableListOf<AudioSegment>()
 
         var cursor = 0.0
-        val boundedSilence = silenceIntervals.map {
-            AudioSegment(
-                start = max(0.0, it.start),
-                end = min(durationSeconds, max(it.start, it.end))
-            )
+        val boundedSilence = silenceIntervals.map { interval ->
+            val start = max(0.0, interval.start)
+            val rawEnd = if (interval.end.isInfinite()) durationSeconds else interval.end
+            val end = min(durationSeconds, max(start, rawEnd))
+            AudioSegment(start, end)
         }
 
         for (interval in boundedSilence) {
@@ -249,7 +270,7 @@ class AudioProcessWorker(
     private suspend fun sliceSegments(
         source: File,
         segments: List<AudioSegment>,
-        workingDir: File,
+        outputDir: File,
         logCollector: StringBuilder
     ): List<File> {
         val result = mutableListOf<File>()
@@ -258,9 +279,9 @@ class AudioProcessWorker(
 
         for ((index, segment) in segments.withIndex()) {
             if (isStopped) break
-            val output = File(workingDir, "seg_${index.toString().padStart(3, '0')}.wav")
+            val output = File(outputDir, "seg_${index.toString().padStart(3, '0')}.wav")
             val command =
-                "-y -ss ${segment.start} -to ${segment.end} -i ${source.absolutePath} -c copy ${output.absolutePath}"
+                "-y -ss ${segment.start} -to ${segment.end} -i ${quotePath(source)} -c copy ${quotePath(output)}"
             if (runFfmpeg(command, logCollector)) {
                 result.add(output)
             }
@@ -271,19 +292,54 @@ class AudioProcessWorker(
         return result
     }
 
-    private suspend fun readDurationSeconds(file: File): Double {
+    private suspend fun readDurationSeconds(file: File, logCollector: StringBuilder): Double {
         val session = withContext(Dispatchers.IO) {
-            FFprobeKit.getMediaInformation(file.absolutePath)
+            FFprobeKit.execute(
+                "-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ${quotePath(file)}"
+            )
         }
-        val durationString = session.mediaInformation?.duration ?: return 0.0
-        return durationString.toDoubleOrNull() ?: 0.0
+        val output = session.output?.trim()
+        val duration = output?.lineSequence()
+            ?.map { it.trim() }
+            ?.firstOrNull { it.isNotBlank() }
+            ?.toDoubleOrNull()
+
+        if (duration != null) {
+            return duration
+        }
+
+        val logs = session.allLogs.joinToString(separator = "\n") { it.message ?: "" }
+        if (logs.isNotBlank()) {
+            logCollector.appendLine(logs)
+        }
+        return logs.lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.isNotBlank() }
+            ?.toDoubleOrNull() ?: 0.0
     }
 
-    private fun zipSegments(segmentFiles: List<File>, zipFile: File) {
+    private fun zipSegments(
+        segmentFiles: List<File>,
+        zipFile: File,
+        infoText: String,
+        logText: String?
+    ) {
         ZipOutputStream(FileOutputStream(zipFile)).use { zipOut ->
+            val infoEntry = ZipEntry("info.txt")
+            zipOut.putNextEntry(infoEntry)
+            zipOut.write(infoText.toByteArray())
+            zipOut.closeEntry()
+
+            if (!logText.isNullOrBlank()) {
+                val logEntry = ZipEntry("log.txt")
+                zipOut.putNextEntry(logEntry)
+                zipOut.write(logText.toByteArray())
+                zipOut.closeEntry()
+            }
+
             segmentFiles.forEachIndexed { index, file ->
                 if (file.exists()) {
-                    val entry = ZipEntry("segment_${index.toString().padStart(3, '0')}.wav")
+                    val entry = ZipEntry("segments/seg_${index.toString().padStart(3, '0')}.wav")
                     zipOut.putNextEntry(entry)
                     file.inputStream().use { input -> input.copyTo(zipOut) }
                     zipOut.closeEntry()
@@ -330,6 +386,34 @@ class AudioProcessWorker(
         }
     }
 
+    private fun zipSimplified(
+        zipFile: File,
+        originalFile: File,
+        originalName: String,
+        infoText: String,
+        logText: String?
+    ) {
+        val safeName = originalName.replace("/", "_")
+        ZipOutputStream(FileOutputStream(zipFile)).use { zipOut ->
+            val infoEntry = ZipEntry("info.txt")
+            zipOut.putNextEntry(infoEntry)
+            zipOut.write(infoText.toByteArray())
+            zipOut.closeEntry()
+
+            if (!logText.isNullOrBlank()) {
+                val logEntry = ZipEntry("log.txt")
+                zipOut.putNextEntry(logEntry)
+                zipOut.write(logText.toByteArray())
+                zipOut.closeEntry()
+            }
+
+            val originalEntry = ZipEntry("original/$safeName")
+            zipOut.putNextEntry(originalEntry)
+            originalFile.inputStream().use { input -> input.copyTo(zipOut) }
+            zipOut.closeEntry()
+        }
+    }
+
     private suspend fun updateProgress(value: Int, step: String) {
         setProgress(
             workDataOf(
@@ -364,6 +448,106 @@ class AudioProcessWorker(
         )
     }
 
+    private fun buildInfoText(
+        modeLabel: String,
+        displayName: String,
+        sizeBytes: Long,
+        silenceThreshold: Double,
+        minSilenceDuration: Double,
+        minSegmentDuration: Double,
+        paddingDuration: Double,
+        durationSeconds: Double,
+        segmentsCount: Int
+    ): String {
+        return buildString {
+            appendLine("Mode: $modeLabel")
+            appendLine("Input: $displayName")
+            appendLine("Size: $sizeBytes bytes")
+            appendLine("Duration: ${"%.2f".format(durationSeconds)} sec")
+            appendLine("Silence threshold: $silenceThreshold dB")
+            appendLine("Min silence: $minSilenceDuration sec")
+            appendLine("Min segment: $minSegmentDuration sec")
+            appendLine("Padding: $paddingDuration sec")
+            appendLine("Segments: $segmentsCount")
+        }
+    }
+
+    private fun buildSimplifiedInfoText(
+        displayName: String,
+        sizeBytes: Long,
+        reason: String
+    ): String {
+        return buildString {
+            appendLine("Mode: SIMPLIFIED")
+            appendLine("Reason: $reason")
+            appendLine("Input: $displayName")
+            appendLine("Size: $sizeBytes bytes")
+            appendLine("Note: FFmpeg offline processing unavailable.")
+        }
+    }
+
+    private fun quotePath(file: File): String = "\"${file.absolutePath}\""
+
+    private fun resolveInputMetadata(uri: Uri): InputMetadata {
+        val resolver = applicationContext.contentResolver
+        var displayName = uri.lastPathSegment ?: "audio_file"
+        var sizeBytes: Long? = null
+
+        resolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+            if (cursor.moveToFirst()) {
+                if (nameIndex >= 0) {
+                    displayName = cursor.getString(nameIndex)
+                }
+                if (sizeIndex >= 0) {
+                    sizeBytes = cursor.getLong(sizeIndex)
+                }
+            }
+        }
+
+        val extension = displayName.substringAfterLast('.', "")
+        return InputMetadata(
+            displayName = displayName,
+            sizeBytes = sizeBytes,
+            extension = extension
+        )
+    }
+
+    private suspend fun runSimplifiedMode(
+        inputFile: File,
+        metadata: InputMetadata,
+        workingDir: File,
+        logCollector: StringBuilder,
+        sizeBytes: Long
+    ): Result {
+        val infoText = buildSimplifiedInfoText(
+            displayName = metadata.displayName,
+            sizeBytes = sizeBytes,
+            reason = "FFmpeg unavailable or probe failed."
+        )
+        val logTail = buildLogTail(logCollector, null)
+        val zipFile = File(workingDir, "result.zip")
+        zipSimplified(
+            zipFile = zipFile,
+            originalFile = inputFile,
+            originalName = metadata.displayName,
+            infoText = infoText,
+            logText = logTail
+        )
+        val savedUri = saveToDownloads(zipFile) ?: return failureResult(
+            "Не удалось сохранить ZIP в загрузки",
+            logCollector
+        )
+        updateProgress(100, "Готово")
+        return Result.success(
+            workDataOf(
+                KEY_OUTPUT_URI to savedUri.toString(),
+                KEY_LOG_TAIL to logTail
+            )
+        )
+    }
+
     companion object {
         const val KEY_INPUT_URI = "input_uri"
         const val KEY_SILENCE_THRESHOLD = "silence_threshold"
@@ -382,6 +566,7 @@ class AudioProcessWorker(
         private const val DEFAULT_MIN_SILENCE = 0.35
         private const val DEFAULT_MIN_SEGMENT = 1.0
         private const val DEFAULT_PADDING = 0.15
+        private const val TAG = "AudioProcessWorker"
 
         fun buildInputData(
             audioUri: Uri,
