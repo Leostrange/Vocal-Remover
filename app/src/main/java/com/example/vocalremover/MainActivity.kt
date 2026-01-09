@@ -34,15 +34,12 @@ class MainActivity : AppCompatActivity() {
     private val workManager by lazy { WorkManager.getInstance(this) }
 
     private val filePicker =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            val data = result.data
-            val uri = data?.data
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri != null) {
-                val flags = data.flags
-                Log.i(TAG, "Picked uri=$uri with flags=0x${flags.toString(16)}")
+                Log.i(TAG, "Picked uri=$uri")
                 viewModel.updateSelection(uri, resolveFileName(uri))
                 lifecycleScope.launch {
-                    persistUriPermission(uri, flags)
+                    persistUriPermission(uri)
                     validateUriAccess(uri)
                 }
             } else {
@@ -74,7 +71,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        binding.selectFileButton.setOnClickListener { filePicker.launch(buildOpenDocumentIntent()) }
+        binding.selectFileButton.setOnClickListener { filePicker.launch(arrayOf("audio/*")) }
         binding.startProcessingButton.setOnClickListener { startProcessing() }
         binding.cancelProcessingButton.setOnClickListener {
             workManager.cancelUniqueWork(AudioProcessWorker.WORK_NAME)
@@ -198,37 +195,13 @@ class MainActivity : AppCompatActivity() {
         return uri.lastPathSegment ?: "audio_file"
     }
 
-    private fun buildOpenDocumentIntent(): Intent {
-        return Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "audio/*"
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-        }
-    }
-
-    private fun persistUriPermission(uri: Uri, resultFlags: Int) {
-        val hasPersistable =
-            resultFlags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION != 0
-        val takeFlags = resultFlags and
-            (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-
-        if (!hasPersistable) {
-            Log.w(TAG, "Persistable permission not granted for $uri, skipping persist")
-            return
-        }
-
-        if (takeFlags == 0) {
-            Log.w(TAG, "No read/write flags granted for $uri, skipping persist")
-            return
-        }
-
-        Log.i(
-            TAG,
-            "Requesting persistable permission for $uri with flags=0x${takeFlags.toString(16)}"
-        )
+    private fun persistUriPermission(uri: Uri) {
         try {
-            contentResolver.takePersistableUriPermission(uri, takeFlags)
+            contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            Log.i(TAG, "Persistable read permission granted for $uri")
         } catch (e: SecurityException) {
             Log.w(TAG, "Unable to persist permission for $uri", e)
         } catch (e: IllegalArgumentException) {
