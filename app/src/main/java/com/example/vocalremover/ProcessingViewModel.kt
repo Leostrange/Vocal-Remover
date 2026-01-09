@@ -124,6 +124,10 @@ class ProcessingViewModel : ViewModel() {
         }
     }
 
+    fun setStatus(message: String) {
+        _uiState.update { it.copy(statusMessage = message, errorMessage = null) }
+    }
+
     fun clearResult() {
         _uiState.update {
             it.copy(
